@@ -89,7 +89,8 @@ field.u(2:grid.ny+1,gird.nx+1) = 0;
 field.p(2:grid.ny+1,grid.nx+2) = field.p(2:grid.ny+1,grid.nx+1);
 
 
-%% Wing - we should maybe test without first(?) - NOT CHANGED YET
+%% Wing - 
+%this is if v(i,j) corresponds to P(i,j) - change v(i,j) to v(i-1,j) 
     %desired size in 'm'
 w.Ly = .25;
 w.Lx = .5;
@@ -100,29 +101,30 @@ w.ldx = floor(w.Lx/grid.dx);
 w.idy = ceil((grid.ny/2)-(w.ldy/2));
 w.idx = ceil((grid.nx/2)-(w.ldx/2));
 
-%BC for wing - there is probably a more elegenat way to code this
-%Note: I am not sure how to properly set values for the corners of 
-%the wing, it seems like there will be conflicting p values
+%BC for wing - 
 %top
-field.v(w.idy-1,w.idx:w.idx+w.ldx-1)=0;
+field.v(w.idy,w.idx:w.idx+w.ldx-1)=0;
 field.u(w.idy,w.idx:w.idx+w.ldx-2)= ...
     -field.u(w.idy-1,w.idx:w.idx+w.ldx-2);
 field.p(w.idy,w.idx:w.idx+w.ldx-1)=field.p(w.idy-1,w.idx:w.idx+w.ldx-1);
 %bot
-field.v(w.idy+w.ldy-1,w.idx:w.idx+w.ldx-1)=0;
+field.v(w.idy+w.ldy,w.idx:w.idx+w.ldx-1)=0;
 field.u(w.idy+w.ldy-1,w.idx:w.idx+w.ldx-2)= ...
     -field.u(w.idy+w.ldy-1,w.idx:w.idx+w.ldx-2);
 field.p(w.idy+w.ldy-1,w.idx:w.idx+w.ldx-1)=field.p(w.idy+w.ldy,w.idx:w.idx+w.ldx-1);
 
 %left - only v,u for now
 field.u(w.idy:w.idy+w.ldy-1,w.idx-1)=0;
-field.v(w.idy:w.idy+w.ldy-1,w.idx)=...
-    -field.v(w.idy:w.idy+w.ldy-1,w.idx-1);
+field.v(w.idy+1:w.idy+w.ldy-1,w.idx)=...
+    -field.v(w.idy+1:w.idy+w.ldy-1,w.idx-1);
+field.p(w.idy:w.idy+w.ldy-1,w.idx) = field.p(w.idy:w.idy+w.ldy-1,w.idx-1);
 
 %right, only v,u for now
 field.u(w.idy:w.idy+w.ldy-1,w.idx+w.ldx-1)=0;
-field.v(w.idy:w.idy+w.ldy-1,w.idx)=...
-    -field.v(w.idy:w.idy+w.ldy-1,w.idx+w.ldx);
+field.v(w.idy+1:w.idy+w.ldy-1,w.idx+w.ldx-1)=...
+    -field.v(w.idy+1:w.idy+w.ldy-1,w.idx+w.ldx);
+field.p(w.idy:w.idy+w.ldy-1,w.idx+w.ldx-1) = ...
+    field.p(w.idy:w.idy+w.ldy-1,w.idx+w.ldx);
 
 %% Parameters (arbitraryly chosen for now)
 
@@ -136,78 +138,39 @@ param.tsteps = param.T/param.dt;
 param.eps = .01;
 % etc
 
-%% SIMPLE
-%fields are initialized
-
-% TODO (i):
-%- agree on matrix structure (sparse/dense, indexing etc.)
-%- agree on handling of wing (I am unsure about this)
-%- combine fields.[] and BC.[] in complete data object (Z for now)
-% to be passed to functions
-
+%% FSM
+% TODO 
 % (ii) write Z = setBC(Z,param) to set BC at each step (this will be
-% similar to what I did above) - BCs also need to be incorporated in
-%the solvers, I suspect
+% similar to what I did above) 
 
-%Z = setBC(Z,param);
-%Vp = inf;  this is the velocity field (u,v) after each update.
-%V(n+1) has to converge to Vp
-%Vn = Z.V;
-%Pn = Z.P;
 
-%TODO (iii) write iterative solver (eg GS) x = GS(A,b)
+%TODO (iii) write iterative solver (eg GS) x = GS(M,b)
 % this can be taken from somewhere
-
+% BCs in Poisson solver need to be handled separately (in M), but are easy (just
+% P)
 
 %TODO (iv): write function to compute A = -grad(V*V)
     % ie.(for conservative form): Au = -d(u*u)/dx - d(u*v)/dy
-    % and Av = -d(u*v)/dx -d(v*v)/dy , both computed at cell centers
-    % This involves the blended schemes from lecture 
-    %----> A = advection(Z,param);
+    % and Av = -d(u*v)/dx -d(v*v)/dy , computed at u, v nodes respectively
+    % This involves the discretizations from lecture 
+    %----> [Au,Av] = advection(Z,param);
     
-%TODO (v): write function to compute B = (mu/rho)*grad(grad(V))
-    % this is just the laplace equation from HWs (+ BCs)
-    % (ie.CD twice) 
+%TODO (v): write function to compute [Bu,Bv] = (mu/rho)*grad(grad(V))
+    % ie. Bu = (d2u/dx2 +d2u/dy2) etc.  at u, v nodes respectively
     
 %TODO (vi): write function to compute grad(P). I think CD is fine
-    % or even forward/backward
-    
-%for u, v seperately (I'm gonna use V for both for the comments):
-% once here for first step
-%A = advection(Z.V,param);
-%B = diffusion(Z.V,param);
-%dP = grad(Z.P,param);
-%Vo=Vn    V from previous step
-%Vn = =0; % V at timestep n+1
-
-
-
+    % ie Px = dP/dx, Py = dP/dy - at P nodes
+   
 for i=1:param.tsteps
+    
+    %set boundary conditions BC+ Wing
+    %loop over sections of interior nodes
+    %VF = Vn + param.dt*(A+B) - for u, v separately
+    
+    %compute P_(n+1) from grad(grad(Pp))=(1/param.dt)*(grad(VF)) - at P
+    %nodes
    
-    
-   while(abs(Vp-Vn)>param.eps) 
-    % calculate V_prime from previous timestep
-    %if AB, save additional timestep after while loop
-    %Vp = Vo + param.dt*(A+B-grad(Pn)) 
-    
-    %compute P_prime from grad(grad(Pp))=(1/param.dt)*(grad(vp))
-    %I think functions from (iii),(v) &(vi) can be 'overloaded' for this
-    %Pp = diffusion((1/param.dt)*(grad(vp))) ~ sth like this
-    
-    %Pn = Pn + Pp
-    %Vn = Vp -param.dt*grad(Pp)  
-   end
-   
-  %solution at timestep i found -> update Z &compute new A,B, gradP
-%Z.P = Pn;
-%Z.V = Vn;
-%A = advection(Z.V,param);
-%B = diffusion(Z.V,param);
-%dP = grad(Z.P,param);
-
-%output for logging, visualization etc
-%TODO (vii): Visualization procedure/ calculation/logging of results
-
+    %V = VF-param.dt*grad(P_(n+1));
 end
 
 
