@@ -1,9 +1,4 @@
 %% F18 CFD Project - incompressible flow around wing
-%TLDR: We should agree on/discuss indexing,BC/grid setup. I've started
-%with the grid and BC equations, but it's already kinda messy, and 
-%I have some questions about the BCs.
-%Then we can split up on functions, which should work well here,
-%I think. see TODOs in SIMPLE section
 %% Setup
 %                     N
 % (1,1) ----------------------------- (1,nx)
@@ -17,74 +12,84 @@
 %                     S
 
 % grid parameters
-grid.Lx = 2;
-grid.Ly = 1;
-grid.dx = .1;
-grid.dy = .1;
+grid.Lx = 2;    %x-length of box
+grid.Ly = 1;    %y-length of box
+grid.dx = .1;   %cell dimensions
+grid.dy = grid.dy;
 
 %number of int. cells: nx*ny - ie. interior p nodes
 grid.nx = grid.Lx/grid.dx;
 grid.ny = grid.Ly/grid.dx;
 
-%set up arrays for p,u,v - only interior
-field.p = zeros(grid.ny,grid.nx);
-field.u = zeros(grid.ny,grid.nx-1);
-field.v = zeros(grid.ny-1,grid.nx);
+%set up arrays for p,u,v - big arrays including ghost nodes
+field.p = zeros(grid.ny+2,grid.nx+2);
+field.u = zeros(grid.ny+2,grid.nx+1);
+field.v = zeros(grid.ny+1,grid.nx+2);
 
-% BCs - far-field for N & E, Neumann for W & S,
-%       Dirchilet at wing
-% Note: I don't know how these BCs will behave in the NW & SE corners
+%information field: this is every value we need plus the corner values in
+%each field, which are not used. If you take the fields without ghost
+%nodes (but with values exactly on boundary), the dimensions are as in the lecture notes:
+%P: ny*nx       U: ny*(nx+1)        V: (ny+1)*nx
+%this will be the array we visualize
+
+%if you look at only the interior nodes, you get:
+%P: ny*nx       U: ny*nx-1         V: (ny-1)*nx
+%this will be the arrays we iterate over after BCs have been set.
+%when iterating over the complete interior (no sections yet), the loops
+%over the big arrays would be (remember i is for y (rows) and j for x (cols):
+%P: for i=2:ny+1
+%       for j=2:nx+1
+%           ...
+
+%U: for i=2:ny+1
+%        for j=2:nx
+%           ...
+%
+%V: for i=2:ny
+%       for j=2:ny+1
+%           ...
+%when using values from other fields in the formulas, each cell
+%corresponds to:  P(i,j)<->U(i,j)<->V(i-1,j)  - this is what's slightly
+%annoying about using the big arrays for iterating. Could be fixed by
+%adding one useless row to V
+
 
 % Inflow across all of W & S
 param.alpha = pi/3;
 param.vIN = 5; % magnitude of velocity of inflow
 
-%W vectors for ghost nodes at W, 
-%starting at cell P(1,0) until cell P(ny,0)(v not used)
-BC.uW = zeros(grid.ny,1);
-BC.uW(:) = param.vIN*sin(param.alpha);
-BC.vW = zeros(grid.ny,1);
-BC.vW(:) = -[field.v(:,1); zeros(1,1)] + 2*param.vIN*cos(param.alpha); 
-BC.pW = zeros(grid.ny,1);
-BC.pW(:) = field.p(:,1);
+% BCs - far-field for N & E, Neumann for W & S,
+%       Dirchilet at wing
+%I am now setting the ghost nodes and boundary values directly in the big
+%array, I think this is better than having separate vectors. 
+%all this code will be put in a setBC func, together with the wing BC,
+%which is called at every timestep before calculating
 
-%S vectors for ghost nodes at S
-%starting at cell P(ny+1,1)(not used) until cell P(ny+1,nx)(u not used)
-BC.uS = zeros(1,grid.nx);
-BC.uS(:) = -[field.u(grid.ny,:) zeros(1,1)] + 2*param.vIN*cos(param.alpha); 
-BC.vS = zeros(1,grid.nx);
-BC.vS(:) = param.vIN*cos(param.alpha);
-BC.pS = zeros(1,grid.nx);
-BC.pS(:) = field.p(grid.ny,:);
+%Corners
+%set all corners (P,U,V) to 0, am too lazy to type this out atm
+
+%West - Neumann
+field.u(2:grid.ny+1,1) = param.vIN*sin(param.alpha);
+field.v(2:grid.ny,1) = 2*param.vIN*cos(param.alpha) - field.v(2:grid.ny-1,2);
+field.p(2:grid.ny+1,1) = field.p(2:grid.ny+1,2);
+
+%South - Neumann
+field.u(grid.ny+2,2:grid.nx) = 2*param.vIN*cos(param.alpha)-field.u(grid.ny+1,2:grid.nx);
+field.v(grid.ny+1,2:grid.nx+1) = param.vIN*sin(param.alpha);
+field.p(grid.ny+2,2:grid.nx+1) = field.p(grid.ny+1,2:grid.nx+1);
+
+%North - far-field
+field.v(1,2:grid.nx+1) = 0;
+field.u(1,2:grid.nx) = field.u(2,2:grid.nx);
+field.p(1,2:grid.nx+1) = field.p(2,2:grid.nx+1);
+
+%East - far-field
+field.v(2:grid.ny,grid.nx+2) = field.v(2:grid.ny,grid.nx+1);
+field.u(2:grid.ny+1,gird.nx+1) = 0;
+field.p(2:grid.ny+1,grid.nx+2) = field.p(2:grid.ny+1,grid.nx+1);
 
 
-%far-field at N&E 
-
-%N vectors for ghost nodes at N
-%starting cell P(0,1)until P(0,nx)(u not used)
-BC.uN = zeros(1,grid.nx);
-BC.uN(:) = [field.u(1,:) zeros(1,1)];
-BC.vN = zeros(1,grid.nx);
-BC.vN(:) = 0;
-BC.pN = zeros(1,grid.nx);
-BC.pN(:) = field.p(1,:);
-
-%E vectors for ghost nodes at E
-%starting cell P(nx+1,1)until P(nx+1,ny)(v not used)
-BC.uE = zeros(grid.ny,1);
-BC.uE(:) = 0;
-BC.vE = zeros(grid.ny,1);
-BC.vE(:) =  [field.v(:,grid.nx); zeros(1,1)];
-BC.pE = zeros(grid.ny,1);
-BC.pE(:) = field.p(:,grid.nx);
-
-%Note: at the moment, ghost cell vectors are one element too short
-%to set up the field with a complete ghost shell.
-%If that is needed for the algorithm (I'm not sure atm), additional
-%dummy elements need to be inserted to set up the full (ny+2)*(nx+2) 
-%matrix
-
-%% Wing - we should maybe test without first(?)
+%% Wing - we should maybe test without first(?) - NOT CHANGED YET
     %desired size in 'm'
 w.Ly = .25;
 w.Lx = .5;
