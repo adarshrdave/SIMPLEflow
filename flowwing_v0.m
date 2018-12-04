@@ -15,7 +15,7 @@
 grid.Lx = 2;    %x-length of box
 grid.Ly = 1;    %y-length of box
 grid.dx = .1;   %cell dimensions
-grid.dy = grid.dy;
+grid.dy = grid.dx;
 
 %number of int. cells: nx*ny - ie. interior p nodes
 grid.nx = grid.Lx/grid.dx;
@@ -70,7 +70,7 @@ param.vIN = 5; % magnitude of velocity of inflow
 
 %West - Neumann
 field.u(2:grid.ny+1,1) = param.vIN*sin(param.alpha);
-field.v(2:grid.ny,1) = 2*param.vIN*cos(param.alpha) - field.v(2:grid.ny-1,2);
+field.v(2:grid.ny,1) = 2*param.vIN*cos(param.alpha) - field.v(2:grid.ny,2);
 field.p(2:grid.ny+1,1) = field.p(2:grid.ny+1,2);
 
 %South - Neumann
@@ -85,7 +85,7 @@ field.p(1,2:grid.nx+1) = field.p(2,2:grid.nx+1);
 
 %East - far-field
 field.v(2:grid.ny,grid.nx+2) = field.v(2:grid.ny,grid.nx+1);
-field.u(2:grid.ny+1,gird.nx+1) = 0;
+field.u(2:grid.ny+1,grid.nx+1) = 0;
 field.p(2:grid.ny+1,grid.nx+2) = field.p(2:grid.ny+1,grid.nx+1);
 
 
