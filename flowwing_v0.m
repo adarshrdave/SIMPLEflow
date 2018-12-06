@@ -12,8 +12,8 @@
 %                     S
 
 % grid parameters
-grid.Lx = 2;    %x-length of box
-grid.Ly = 1;    %y-length of box
+grid.Lx = 10;    %x-length of box
+grid.Ly = 5;    %y-length of box
 grid.dx = .1;   %cell dimensions
 grid.dy = grid.dx;
 
@@ -51,7 +51,7 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 
 % Inflow across all of W & S
 param.alpha = pi/3;
-param.vIN = 5; % magnitude of velocity of inflow
+param.vIN = 1; % magnitude of velocity of inflow
 
 % BCs - far-field for N & E, Neumann for W & S,
 %       Dirchilet at wing
@@ -139,23 +139,24 @@ field.p(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1) = ...
 param.Re = 100;
 param.rho = 1.184;
 param.mu = 1;
-param.T = 5;
-param.dt = .1;
+param.T = 2;
+param.dt = .01;
 param.tsteps = param.T/param.dt;
 param.eps = .01;
 param.Q=0.5;
 param.s=10; %maximum speed in m/s
 
 % etc
-%% Functions
-
-
 
 
 %% FSM
 %P: for i=2:nx+1
 %       for j=2:ny+1
 %           ...
+
+for t=1:param.tsteps
+    
+field=setBC_nowing(field,grid,param);
 
 %Intermediate velocity field
 U=field.u;
@@ -202,8 +203,13 @@ for i=2:grid.nx+1
     end
 end
 
+p_new = pressure_poisson(field,param,grid,w);
+field.p(2:grid.nx+1,2:grid.ny+1) = p_new;
 
+field.v = field.v-param.dt*dPdy(field,grid);
+field.u = field.u-param.dt*dPdx(field,grid);
 
+end
 % for i=1:param.tsteps
 %     
 %     %set boundary conditions BC+ Wing loop over sections of interior nodes
@@ -216,13 +222,158 @@ end
 % end
 
 
+%% Functions
+
+%computes CD at v(i,j) node
+function[dP_dy] =  dPdy(field,grid)
+dP_dy = zeros(size(field.v));
+for i=2:grid.nx+1
+    for j=2:grid.ny
+        dP_dy(i,j) = (field.p(i,j+1)-field.p(i,j))/grid.dy;
+    end
+end
+end
+
+%computes CD at u(i,j)
+function[dP_dx] =  dPdx(field,grid)
+dP_dx = zeros(size(field.u));
+for i=2:grid.nx
+    for j=2:grid.ny+1
+        dP_dx(i,j) = (field.p(i+1,j)-field.p(i,j))/grid.dx;
+    end
+end
+end
 
 
+function[du_dx] =  dudx(field,grid)
+du_dx = zeros(grid.ny,grid.ny);
+for i=2:grid.nx+1
+    for j=2:grid.ny+1
+        du_dx(i-1,j-1) = (field.u(i,j)-field.u(i-1,j))/grid.dx;
+    end
+end
+end
 
+function[dv_dy] =  dvdy(field,grid)
+dv_dy = zeros(grid.ny,grid.ny);
+for i=2:grid.nx+1
+    for j=2:grid.ny+1
+        dv_dy(i-1,j-1) = (field.v(i,j)-field.v(i,j-1))/grid.dy;
+    end
+end
+end
 
+function[p_new] = pressure_poisson(field,param,grid,w)
+%first right hand side b: du/dx + dv/dy at P(i,j)
+b = zeros(grid.nx,grid.ny);
+b = dvdy(field,grid) +dudx(field,grid);
+b = b/param.dt;
+%transform to vector for solving
+b = reshape(b.',[grid.nx*grid.ny 1]);
 
+%set up matrix for solving A*p = b - this should be removed from function
+%later as it does not change - for partitions there will be four different
+%ones
+Ap = zeros(grid.nx*grid.ny,grid.nx*grid.ny);
 
+for i=2:grid.nx-1
+    %south
+    Ap((i-1)*grid.ny+1,(i-1)*grid.ny+1)=-3;
+    Ap((i-1)*grid.ny+1,(i-1)*grid.ny+2)=1;
+    Ap((i-1)*grid.ny+1,(i-1)*grid.ny+1+grid.ny)=1;
+    Ap((i-1)*grid.ny+1,(i-1)*grid.ny+1-grid.ny)=1;
+    
+    %north
+    Ap((i)*grid.ny,(i)*grid.ny)=-3;
+    Ap((i)*grid.ny,(i)*grid.ny-1)=1;
+    Ap((i)*grid.ny,(i)*grid.ny+grid.ny)=1;
+    Ap((i)*grid.ny,(i)*grid.ny-grid.ny)=1;
+    
+    for j=2:grid.ny-1
+        %interior
+        k = (i-1)*grid.ny+j;
+        Ap(k,k) = -4;
+        Ap(k,k-1) = 1;
+        Ap(k,k+1) = 1;
+        Ap(k,k+grid.ny) = 1;
+        Ap(k,k-grid.ny) = 1;
+    end   
+end
 
+for j=2:grid.ny-1
+    %west
+    Ap(j,j) = -3;
+    Ap(j,j+1) = 1;
+    Ap(j,j-1) = 1;
+    Ap(j,j+grid.ny) = 1;
+    
+    %east
+    Ap((grid.nx-1)*grid.ny+j,(grid.nx-1)*grid.ny+j) = 3;
+    Ap((grid.nx-1)*grid.ny+j,(grid.nx-1)*grid.ny+j-1) = 1;
+    Ap((grid.nx-1)*grid.ny+j,(grid.nx-1)*grid.ny+j+1) = 1; 
+    Ap((grid.nx-1)*grid.ny+j,(grid.nx-2)*grid.ny+j) = 1;
+end
+
+%corners
+%SW
+Ap(1,1) = -2;
+Ap(1,2) = 1;
+Ap(1,1+grid.ny) = 1;
+%NW
+Ap(grid.ny,grid.ny) = -2;
+Ap(grid.ny,grid.ny-1) = 1;
+Ap(grid.ny,grid.ny*2) = 1;
+%SE
+Ap((grid.nx-1)*grid.ny+1,(grid.nx-1)*grid.ny+1) = -2;
+Ap((grid.nx-1)*grid.ny+1,(grid.nx-1)*grid.ny+2) = 1;
+Ap((grid.nx-1)*grid.ny+1,(grid.nx-2)*grid.ny+1) = 1;
+%NE
+Ap(grid.nx*grid.ny,grid.nx*grid.ny) = -2;
+Ap(grid.nx*grid.ny,grid.nx*grid.ny-1) = 1;
+Ap(grid.nx*grid.ny,grid.nx*grid.ny-grid.ny) = 1;
+
+p_new = Ap/b.';
+
+p_new = reshape(p_new,grid.ny, grid.nx).';
+end
+
+function[field] = setBC_nowing(field,grid,param)
+field.p(1,1) = 0;
+field.p(grid.nx+2,1) = 0;
+field.p(1,grid.ny+2) = 0;
+field.p(grid.nx+2,grid.ny+2) = 0;
+
+field.v(1,1) = 0;
+field.v(grid.nx+2,1) = 0;
+field.v(1,grid.ny+1) = 0;
+field.v(grid.nx+2,grid.ny+1) = 0;
+
+field.u(1,1) = 0;
+field.u(grid.nx+1,1) = 0;
+field.u(1,grid.ny+2) = 0;
+field.u(grid.nx+1,grid.ny+2) = 0;
+
+%West - Neumann
+field.u(1,2:grid.ny+1) = param.vIN*sin(param.alpha);
+field.v(1,2:grid.ny) = 2*param.vIN*cos(param.alpha) - field.v(2,2:grid.ny);
+field.p(1,2:grid.ny+1) = field.p(2,2:grid.ny+1);
+
+%South - Neumann
+field.u(2:grid.nx,1) = 2*param.vIN*cos(param.alpha)-field.u(2:grid.nx,2);
+field.v(2:grid.nx+1,1) = param.vIN*sin(param.alpha);
+field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
+
+%North - far-field
+field.v(2:grid.nx+1,grid.ny+1) = 0;
+field.u(2:grid.nx,grid.ny+2) = field.u(2:grid.nx,grid.ny+1);
+field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+2);
+
+%East - far-field
+field.v(grid.nx+2,2:grid.ny) = field.v(grid.nx+1,2:grid.ny);
+field.u(grid.nx+1,2:grid.ny+1) = 0;
+field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
+
+end
 
 
 
