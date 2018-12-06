@@ -3,17 +3,17 @@
 %                     N
 % (1,ny) ----------------------------- (nx,ny)
 %      |                             |
-%      |    (w.idx,w.idy)            |
+%      |                             |
 %   W  |          |-------|          |   E
 %      |          |-------|          |
-%      |                             |
+%      |   (w.idx,w.idy)             |
 %      |                             |
 %(1,1) ----------------------------- (nx,1)
 %                     S
 
 % grid parameters
-grid.Lx = 5;    %x-length of box
-grid.Ly = 2;    %y-length of box
+grid.Lx = 2;    %x-length of box
+grid.Ly = 1;    %y-length of box
 grid.dx = .1;   %cell dimensions
 grid.dy = grid.dx;
 
@@ -48,11 +48,6 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 %V: for i=2:ny
 %       for j=2:ny+1
 %           ...
-%when using values from other fields in the formulas, each cell
-%corresponds to:  P(i,j)<->U(i,j)<->V(i-1,j)  - this is what's slightly
-%annoying about using the big arrays for iterating. Could be fixed by
-%adding one useless row to V
-
 
 % Inflow across all of W & S
 param.alpha = pi/3;
@@ -66,7 +61,20 @@ param.vIN = 5; % magnitude of velocity of inflow
 %which is called at every timestep before calculating
 
 %Corners
-%set all corners (P,U,V) to 0, am too lazy to type this out atm
+field.p(1,1) = 0;
+field.p(grid.nx+2,1) = 0;
+field.p(1,grid.ny+2) = 0;
+field.p(grid.nx+2,grid.ny+2) = 0;
+
+field.v(1,1) = 0;
+field.v(grid.nx+2,1) = 0;
+field.v(1,grid.ny+1) = 0;
+field.v(grid.nx+2,grid.ny+1) = 0;
+
+field.u(1,1) = 0;
+field.u(grid.nx+1,1) = 0;
+field.u(1,grid.ny+2) = 0;
+field.u(grid.nx+1,grid.ny+2) = 0;
 
 %West - Neumann
 field.u(1,2:grid.ny+1) = param.vIN*sin(param.alpha);
@@ -74,14 +82,14 @@ field.v(1,2:grid.ny) = 2*param.vIN*cos(param.alpha) - field.v(2,2:grid.ny);
 field.p(1,2:grid.ny+1) = field.p(2,2:grid.ny+1);
 
 %South - Neumann
-field.u(2:grid.nx,grid.ny+2) = 2*param.vIN*cos(param.alpha)-field.u(2:grid.nx,grid.ny+1);
-field.v(2:grid.nx+1,grid.ny+1) = param.vIN*sin(param.alpha);
-field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+1);
+field.u(2:grid.nx,1) = 2*param.vIN*cos(param.alpha)-field.u(2:grid.nx,2);
+field.v(2:grid.nx+1,1) = param.vIN*sin(param.alpha);
+field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
 
 %North - far-field
-field.v(2:grid.nx+1,1) = 0;
-field.u(2:grid.nx,1) = field.u(2:grid.nx,2);
-field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
+field.v(2:grid.nx+1,grid.ny+1) = 0;
+field.u(2:grid.nx,grid.ny+2) = field.u(2:grid.nx,grid.ny+1);
+field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+2);
 
 %East - far-field
 field.v(grid.nx+2,2:grid.ny) = field.v(grid.nx+1,2:grid.ny);
@@ -90,39 +98,38 @@ field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
 
 
 %% Wing - 
-%this is if v(i,j) corresponds to P(i,j) - change v(i,j) to v(i-1,j) 
     %desired size in 'm'
-w.Ly = .5;
-w.Lx = 1;
+w.Ly = .1;
+w.Lx = .2;
     %size in no cells
 w.ldy = floor(w.Ly/grid.dy);
 w.ldx = floor(w.Lx/grid.dx);
-    %position in  grid
+    %position in  grid - left-bottom corner-cell of wing
 w.idy = ceil((grid.ny/2)-(w.ldy/2));
 w.idx = ceil((grid.nx/2)-(w.ldx/2));
 
 %BC for wing - 
-%top
-field.v(w.idx:w.idx+w.ldx-1,w.idy)=0;
+%bot
+field.v(w.idx:w.idx+w.ldx-1,w.idy-1)=0;
 field.u(w.idx:w.idx+w.ldx-2,w.idy)= ...
     -field.u(w.idx:w.idx+w.ldx-2,w.idy-1);
 field.p(w.idx:w.idx+w.ldx-1,w.idy)=field.p(w.idx:w.idx+w.ldx-1,w.idy-1);
-%bot
-field.v(w.idx:w.idx+w.ldx-1,w.idy+w.ldy)=0;
+%top
+field.v(w.idx:w.idx+w.ldx-1,w.idy+w.ldy-1)=0;
 field.u(w.idx:w.idx+w.ldx-2,w.idy+w.ldy-1)= ...
-    -field.u(w.idx:w.idx+w.ldx-2,w.idy+w.ldy-1);
+    -field.u(w.idx:w.idx+w.ldx-2,w.idy+w.ldy);
 field.p(w.idx:w.idx+w.ldx-1,w.idy+w.ldy-1)=field.p(w.idx:w.idx+w.ldx-1,w.idy+w.ldy);
 
-%left - only v,u for now
+%left 
 field.u(w.idx-1,w.idy:w.idy+w.ldy-1)=0;
-field.v(w.idx,w.idy+1:w.idy+w.ldy-1)=...
-    -field.v(w.idx-1,w.idy+1:w.idy+w.ldy-1);
+field.v(w.idx,w.idy:w.idy+w.ldy-2)=...
+    -field.v(w.idx-1,w.idy:w.idy+w.ldy-2);
 field.p(w.idx,w.idy:w.idy+w.ldy-1) = field.p(w.idx-1,w.idy:w.idy+w.ldy-1);
 
-%right, only v,u for now
+%right
 field.u(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1)=0;
-field.v(w.idx+w.ldx-1,w.idy+1:w.idy+w.ldy-1)=...
-    -field.v(w.idx+w.ldx,w.idy+1:w.idy+w.ldy-1);
+field.v(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-2)=...
+    -field.v(w.idx+w.ldx,w.idy:w.idy+w.ldy-2);
 field.p(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1) = ...
     field.p(w.idx+w.ldx,w.idy:w.idy+w.ldy-1);
 
@@ -140,6 +147,10 @@ param.Q=0.5;
 param.s=10; %maximum speed in m/s
 
 % etc
+%% Functions
+
+
+
 
 %% FSM
 %P: for i=2:nx+1
