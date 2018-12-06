@@ -12,9 +12,9 @@
 %                     S
 
 % grid parameters
-grid.Lx = 10;    %x-length of box
-grid.Ly = 5;    %y-length of box
-grid.dx = .1;   %cell dimensions
+grid.Lx = 40;    %x-length of box
+grid.Ly = 20;    %y-length of box
+grid.dx = 1;   %cell dimensions
 grid.dy = grid.dx;
 
 %number of int. cells: nx*ny - ie. interior p nodes
@@ -51,7 +51,7 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 
 % Inflow across all of W & S
 param.alpha = pi/3;
-param.vIN = 1; % magnitude of velocity of inflow
+param.vIN = 5; % magnitude of velocity of inflow
 
 % BCs - far-field for N & E, Neumann for W & S,
 %       Dirchilet at wing
@@ -82,8 +82,8 @@ field.v(1,2:grid.ny) = 2*param.vIN*cos(param.alpha) - field.v(2,2:grid.ny);
 field.p(1,2:grid.ny+1) = field.p(2,2:grid.ny+1);
 
 %South - Neumann
-field.u(2:grid.nx,1) = 2*param.vIN*cos(param.alpha)-field.u(2:grid.nx,2);
-field.v(2:grid.nx+1,1) = param.vIN*sin(param.alpha);
+field.u(2:grid.nx,1) = 2*param.vIN*sin(param.alpha)-field.u(2:grid.nx,2);
+field.v(2:grid.nx+1,1) = param.vIN*cos(param.alpha);
 field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
 
 %North - far-field
@@ -139,8 +139,8 @@ field.p(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1) = ...
 param.Re = 100;
 param.rho = 1.184;
 param.mu = 1;
-param.T = 2;
-param.dt = .01;
+param.T = 9;
+param.dt = .009;
 param.tsteps = param.T/param.dt;
 param.eps = .01;
 param.Q=0.5;
@@ -209,6 +209,8 @@ field.p(2:grid.nx+1,2:grid.ny+1) = p_new;
 field.v = field.v-param.dt*dPdy(field,grid);
 field.u = field.u-param.dt*dPdx(field,grid);
 
+figure(1)
+surface(field.u.')
 end
 % for i=1:param.tsteps
 %     
@@ -359,14 +361,14 @@ field.v(1,2:grid.ny) = 2*param.vIN*cos(param.alpha) - field.v(2,2:grid.ny);
 field.p(1,2:grid.ny+1) = field.p(2,2:grid.ny+1);
 
 %South - Neumann
-field.u(2:grid.nx,1) = 2*param.vIN*cos(param.alpha)-field.u(2:grid.nx,2);
-field.v(2:grid.nx+1,1) = param.vIN*sin(param.alpha);
+field.u(2:grid.nx,1) = 2*param.vIN*sin(param.alpha)-field.u(2:grid.nx,2);
+field.v(2:grid.nx+1,1) = param.vIN*cos(param.alpha);
 field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
 
 %North - far-field
 field.v(2:grid.nx+1,grid.ny+1) = 0;
 field.u(2:grid.nx,grid.ny+2) = field.u(2:grid.nx,grid.ny+1);
-field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+2);
+field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+1);
 
 %East - far-field
 field.v(grid.nx+2,2:grid.ny) = field.v(grid.nx+1,2:grid.ny);
