@@ -12,9 +12,9 @@
 %                     S
 
 % grid parameters
-grid.Lx = 40;    %x-length of box
-grid.Ly = 20;    %y-length of box
-grid.dx = 1;   %cell dimensions
+grid.Lx = 20;    %x-length of box
+grid.Ly = 10;    %y-length of box
+grid.dx = .5;   %cell dimensions
 grid.dy = grid.dx;
 
 %number of int. cells: nx*ny - ie. interior p nodes
@@ -99,8 +99,8 @@ field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
 
 %% Wing - 
     %desired size in 'm'
-w.Ly = .1;
-w.Lx = .2;
+w.Ly = .5;
+w.Lx = 1;
     %size in no cells
 w.ldy = floor(w.Ly/grid.dy);
 w.ldx = floor(w.Lx/grid.dx);
@@ -139,8 +139,8 @@ field.p(w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1) = ...
 param.Re = 100;
 param.rho = 1.184;
 param.mu = 1;
-param.T = 9;
-param.dt = .009;
+param.T = 5;
+param.dt = .01;
 param.tsteps = param.T/param.dt;
 param.eps = .01;
 param.Q=0.5;
@@ -222,6 +222,101 @@ end
 %    
 %     %V = VF-param.dt*grad(P_(n+1));
 % end
+%% Loops with wing
+%looping over interior nodes only
+%for each timestep:
+
+%field=setBC(field,grid,param);
+
+%Intermediate velocity field
+U=field.u;
+V=field.v;
+
+%U loops- for everything computed at u(i,j)
+%Part 1 - left
+for i=2:w.idx-2
+    for j=2:grid.ny+1
+        %calculations
+        %field.u(i,j)=..
+    end
+end
+%part 2 - top
+for i=w.idx-1:w.idx+w.ldx-1
+    for j=w.idy+w.ldy:grid.ny+1
+        %calculations
+        %field.u(i,j)=..
+    end
+end
+%part 3 - bot
+for i=w.idx-1:w.idx+w.ldx-1
+    for j=2:w.idy-1
+     %calculations
+     %field.u(i,j)=..
+    end
+end
+%part 4 - right
+for i=w.idx+w.ldx:grid.nx
+    for j=2:grid.ny+1
+       %calculations
+       %field.u(i,j)=..
+    end
+end
+
+%V loops - for everything computed at V(i,j)
+for i=2:w.idx-1
+    for j=2:grid.ny
+        %calculations
+        %field.v(i,j)=..
+    end
+end
+for i=w.idx:w.idx+w.ldx-1
+    for j=w.idy+w.ldy:grid.ny
+     %calculations
+      %field.v(i,j)=..
+    end
+end
+for i=w.idx:w.idx+w.ldx-1
+    for j=2:w.idy-2
+       %calculations
+        %field.v(i,j)=..
+    end
+end
+for i=w.idx+w.ldx:grid.nx+1
+    for j=2:grid.ny
+       %calculations
+        %field.v(i,j)=..
+    end
+end
+
+%P loops - for everything computed at P(i,j)
+for i=2:w.idx-1
+    for j=2:grid.ny+1
+         %field.p(i,j)=..
+    end
+end
+for i=w.idx:w.idx+w.ldx-1
+    for j=w.idy+w.ldy:grid.ny+1
+          %field.p(i,j)=..
+    end
+end
+for i=w.idx:w.idx+w.ldx-1
+  for j=2:w.idy-1
+        %field.p(i,j)=..
+  end
+end
+for i=w.idx+w.ldx:grid.nx+1
+    for j=2:grid.ny+1
+          %field.p(i,j)=..
+    end
+end
+
+
+
+
+
+
+
+        
 
 
 %% Functions
@@ -246,7 +341,7 @@ for i=2:grid.nx
 end
 end
 
-
+%at P(i,j)
 function[du_dx] =  dudx(field,grid)
 du_dx = zeros(grid.ny,grid.ny);
 for i=2:grid.nx+1
@@ -256,6 +351,7 @@ for i=2:grid.nx+1
 end
 end
 
+%at P(i,j)
 function[dv_dy] =  dvdy(field,grid)
 dv_dy = zeros(grid.ny,grid.ny);
 for i=2:grid.nx+1
@@ -264,6 +360,79 @@ for i=2:grid.nx+1
     end
 end
 end
+
+
+%new solver with sections - just starting this here can merge later
+function[p_new] = pressure_solver(field,param,w)
+
+%---------part 1: left-------------
+nx1 = w.idx-2;    ny1 = grid.ny; %- dimension of part 1
+b1 = zeros(nx1,ny1);
+A1 = zeros((nx1)*ny1,(nx1)*ny1);
+
+%first right hand side b: du/dx + dv/dy + P- at open boundaries
+for i=2:w.idx-1
+    for j=2:grid.ny+1
+         b1(i-1,j-1) = (field.u(i,j)-field.u(i-1,j))/grid.dx +...
+             (field.v(i,j)-field.v(i,j-1))/grid.dy;    
+         if (i==w.idx-1&&(j<w.idy||j>=w.idy+w.ldy)) %open boundaries
+         b1(i-1,j-1) = b1(i-1,j-1)-(1/(grid.dx^2))*field.p(i+1,j);
+         end
+    end
+end
+b1=b1/param.dt;
+b1 = reshape(b1.',[(nx1)*ny1 1]); 
+
+%now matrix for solver
+
+for i=2:nx1-1
+    %south
+    A1((i-1)*ny1+1,(i-1)*ny1+1)=-3;
+    A1((i-1)*ny1+1,(i-1)*ny1+2)=1;
+    A1((i-1)*ny1+1,(i-1)*ny1+1+ny1)=1;
+    A1((i-1)*ny1+1,(i-1)*ny1+1-ny1)=1;
+    
+    %north
+    A1((i)*ny1,(i)*ny1)=-3;
+    A1((i)*ny1,(i)*ny1-1)=1;
+    A1((i)*ny1,(i)*ny1+ny1)=1;
+    A1((i)*ny1,(i)*ny1-ny1)=1;
+     for j=2:ny1-1
+        %interior
+        k = (i-1)*ny1+j;
+        A1(k,k) = -4;
+        A1(k,k-1) = 1;
+        A1(k,k+1) = 1;
+        A1(k,k+grid.ny) = 1;
+        A1(k,k-grid.ny) = 1;
+    end   
+    
+end 
+
+for j=2:ny1-1
+    %west
+    A1(j,j) = -3;
+    A1(j,j+1) = 1;
+    A1(j,j-1) = 1;
+    A1(j,j+ny1) = 1;
+    
+    %east
+    if((j<w.idy-1)||(j>=w.idy+w.ldy-1))
+    A1((nx1-1)*ny1+j,(nx1-1)*ny1+j) = 3;
+    A1((nx1-1)*ny1+j,(nx1-1)*ny1+j-1) = 1;
+    A1((nx1-1)*ny1+j,(nx1-1)*ny1+j+1) = 1; 
+    A1((nx1-1)*ny1+j,(nx1-2)*ny1+j) = 1;
+    end
+end
+
+%p1 = GaussSeidel(A1,b1);
+
+%------------part 2: top----------------
+
+
+
+end
+
 
 function[p_new] = pressure_poisson(field,param,grid,w)
 %first right hand side b: du/dx + dv/dy at P(i,j)
@@ -334,6 +503,7 @@ Ap(grid.nx*grid.ny,grid.nx*grid.ny) = -2;
 Ap(grid.nx*grid.ny,grid.nx*grid.ny-1) = 1;
 Ap(grid.nx*grid.ny,grid.nx*grid.ny-grid.ny) = 1;
 
+Ap =(1/grid.dx^2)*Ap;
 p_new = Ap/b.';
 
 p_new = reshape(p_new,grid.ny, grid.nx).';
@@ -376,6 +546,7 @@ field.u(grid.nx+1,2:grid.ny+1) = 0;
 field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
 
 end
+
 
 
 
