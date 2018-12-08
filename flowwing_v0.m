@@ -50,7 +50,7 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 %           ...
 
 % Inflow across all of W & S
-param.alpha = pi/3;
+param.alpha = pi/4;
 param.vIN = 5; % magnitude of velocity of inflow
 
 % BCs - far-field for N & E, Neumann for W & S,
@@ -203,14 +203,15 @@ for i=2:grid.nx+1
     end
 end
 
-p_new = pressure_poisson(field,param,grid,w);
-field.p(2:grid.nx+1,2:grid.ny+1) = p_new;
+p_new = pressure_poisson_2(field,param,grid);
+field.p = p_new;
 
 field.v = field.v-param.dt*dPdy(field,grid);
 field.u = field.u-param.dt*dPdx(field,grid);
 
 figure(1)
 surface(field.u.')
+pause(.01)
 end
 % for i=1:param.tsteps
 %     
@@ -509,6 +510,33 @@ p_new = Ap/b.';
 p_new = reshape(p_new,grid.ny, grid.nx).';
 end
 
+
+function [p_new] = pressure_poisson_2(field,param,grid)
+% Assuming pressure field already initialized.
+
+% Boundary nodes.
+
+% Interior nodes.
+% note to self: field.p, field.u, field.v, grid.dx, grid.nx, param.dt
+
+p_new = field.p;
+
+%P: for i=2:nx+1
+%       for j=2:ny+1
+%           ...
+for i=2:grid.nx+1
+    for j=2:grid.ny+1
+        % Point Gauss-Seidel
+        dudx = (field.u(i,j) - field.u(i-1,j))/grid.dx;
+        dvdy = (field.v(i,j) - field.v(i,j-1))/grid.dy;
+        p_new(i,j) = (1/4)*(p_new(i-1,j) + field.p(i+1,j) + p_new(i,j-1) + ... 
+            field.p(i,j+1) - (grid.dx^2/param.dt)*(dudx + dvdy));
+    end
+end
+
+end
+
+
 function[field] = setBC_nowing(field,grid,param)
 field.p(1,1) = 0;
 field.p(grid.nx+2,1) = 0;
@@ -546,6 +574,7 @@ field.u(grid.nx+1,2:grid.ny+1) = 0;
 field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
 
 end
+
 
 
 
