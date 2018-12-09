@@ -11,8 +11,9 @@
 %(1,1) ----------------------------- (nx,1)
 %                     S
 
+clear all;
 % grid parameters
-grid.Lx = 100;    %x-length of box
+grid.Lx = 200;    %x-length of box
 grid.Ly = 100;    %y-length of box
 grid.dx = 1;   %cell dimensions
 grid.dy = grid.dx;
@@ -28,13 +29,13 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 
 
 % Inflow across all of W & S
-param.alpha = 0/2;
-param.vIN = 20; % magnitude of velocity of inflow
+param.alpha = pi/4;
+param.vIN = 10; % magnitude of velocity of inflow
 
 % Wing - 
     %desired size in 'm'
-w.Ly = 5;
-w.Lx = 30;
+w.Ly = 10;
+w.Lx = 40;
     %size in no cells
 w.ldy = floor(w.Ly/grid.dy);
 w.ldx = floor(w.Lx/grid.dx);
@@ -64,9 +65,9 @@ for t=1:param.tsteps
     
 field = setBC(field,grid,param,w);
 
-figure(1)
-surface(field.p.')
-pause(.1)
+%figure(1)
+%surface(field.u.')
+%pause(.01)
 
 %Intermediate velocity field
 field = computeVF_sections(field,grid,param,w);
@@ -78,8 +79,10 @@ field.p = solveP_GS(field,grid,param,w);
 field = updateV(field,grid,param,w);
 
 end
-%% Functions
+visualize(field,grid);
+%% test space
 
+%% Functions
 %computes CD at v(i,j) node
 function[dP_dy] =  dPdy(field,grid)
 dP_dy = zeros(size(field.v));
@@ -128,13 +131,15 @@ field.v(2:grid.nx+1,1) = param.vIN*cos(param.alpha);
 field.p(2:grid.nx+1,1) = field.p(2:grid.nx+1,2);
 
 %North - far-field
-field.v(2:grid.nx+1,grid.ny+1) = 0;
+%field.v(2:grid.nx+1,grid.ny+1) = 0;
+field.v(2:grid.nx+1,grid.ny+1) = field.v(2:grid.nx+1,grid.ny);
 field.u(2:grid.nx,grid.ny+2) = field.u(2:grid.nx,grid.ny+1);
 field.p(2:grid.nx+1,grid.ny+2) = field.p(2:grid.nx+1,grid.ny+1);
 
 %East - far-field
 field.v(grid.nx+2,2:grid.ny) = field.v(grid.nx+1,2:grid.ny);
-field.u(grid.nx+1,2:grid.ny+1) = 0;
+%field.u(grid.nx+1,2:grid.ny+1) = 0;
+field.u(grid.nx+1,2:grid.ny+1) = field.u(grid.nx,2:grid.ny+1);
 field.p(grid.nx+2,2:grid.ny+1) = field.p(grid.nx+1,2:grid.ny+1);
 
 %BC for wing - 
@@ -166,6 +171,7 @@ end
 function[field] = computeVF_sections(field,grid,param,w)
 U=field.u;
 V=field.v;
+
 %U loops
 %part 1
 for i=2:w.idx-2
@@ -336,10 +342,22 @@ end
 
 end
 
+function[] = visualize(field,grid)
+[x,y] = meshgrid(1:1:grid.nx,1:1:grid.ny);
+u = zeros(grid.nx,grid.ny);
+v = zeros(grid.nx,grid.ny);
 
+for i = 2:grid.nx+1
+    for j = 2:grid.ny+1
+        u(i-1,j-1) = (field.u(i,j)+field.u(i-1,j))/2;
+        v(i-1,j-1) = (field.v(i,j)+field.v(i,j-1))/2;    
+    end
+end
+quiver(x.',y.',u,v)
+end
 
-
-
+% figure(2)
+% surface(v.')
 
 
 
