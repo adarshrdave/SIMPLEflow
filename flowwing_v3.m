@@ -13,7 +13,7 @@ ca%% F18 CFD Project - incompressible flow around wing
 
 clear all;
 % grid parameters
-grid.Lx = 200;    %x-length of box
+grid.Lx = 240;    %x-length of box
 grid.Ly = 100;    %y-length of box
 grid.dx = 1;   %cell dimensions
 grid.dy = grid.dx;
@@ -29,7 +29,7 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 
 
 % Inflow across all of W & S
-param.alpha = 3.5*pi/8;
+param.alpha = 4*pi/8;
 param.vIN = 10; % magnitude of velocity of inflow
 
 % Wing - 
@@ -59,40 +59,67 @@ param.eps = .01;
 param.Q=0.5;
 param.s=10; %maximum speed in m/s
 
-%% FSM
+%% bring to steady state - use for lift calcs
+t = 1;
+diff=inf;
+delta = 10^(-3); %max rel change of pressure field
 
-for t=1:param.tsteps
-    
+while(diff>delta)
+t=t+1; 
 field = setBC(field,grid,param,w);
-
-%figure(1)
-%surface(field.u.')
-%pause(.01)
+p_old=field.p;
 
 %Intermediate velocity field
 field = computeVF_sections(field,grid,param,w);
 
 %field = setBC(field,grid,param,w);
-
 field.p = solveP_GS(field,grid,param,w);
-
 field = updateV(field,grid,param,w);
-figure(1)
-surface(field.p.')
-pause(0.1)
-% if (mod(t,50)==0)
-% t
-% figure(1)
-% clf
-% visualize(field,grid);
-% pause(0.1)
-% end
+
+diff = (norm(field.p-p_old)/norm(field.p));
+if (mod(t,10)==0)
+    disp(diff)
 end
-visualize(field,grid);
-%% test space
+end
+
+T=t*param.dt; %- time until steady state - maybe interesting over vIN?
 visualize(field,grid,w);
+
+%lift calcs can go here - make big loop over alpha for plot
+
+field_ss=field;
+%% Varying angle
+% bring to steady state at param.alpha=alpha_start first.
+field = field_ss;
+alpha_start = pi/2;
+alpha_end = pi/4;
+d = 50;
+param.T = 1; %for each angle
+param.dt = .02;
+param.tsteps = param.T/param.dt;
+
+for a =alpha_start:-(alpha_start-alpha_end)/d:alpha_end
+param.alpha= a;
+if (a== alpha_end)
+   param.tsteps =  150;
+end
+for t=1:param.tsteps
+field = setBC(field,grid,param,w);
+%Intermediate velocity field
+field = computeVF_sections(field,grid,param,w);
+%field = setBC(field,grid,param,w);
+field.p = solveP_GS(field,grid,param,w);
+field = updateV(field,grid,param,w); 
+end
+
+makeGIF(field,grid,w,param,alpha_start,'rot1.gif')
+
+end
+%% test space
+visualize(field,grid,param,w);
 %% Functions
 %computes CD at v(i,j) node
+
 function[dP_dy] =  dPdy(field,grid)
 dP_dy = zeros(size(field.v));
 for i=2:grid.nx+1
@@ -350,7 +377,7 @@ end
 
 end
 
-function[] = visualize(field,grid,w)
+function[] = visualize(field,grid,param,w)
 [x,y] = meshgrid(1:1:grid.nx,1:1:grid.ny);
 u = zeros(grid.nx,grid.ny);
 v = zeros(grid.nx,grid.ny);
@@ -364,20 +391,39 @@ for i = 2:grid.nx+1
 end
 u(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
 v(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
-
-%quiver(x.',y.',u,v)
-figure(1);
+axis tight manual
+hold on;
+clf
 surface(p','EdgeColor','none','LineStyle','none','FaceLighting','phong')
-figure(2)
-streamslice(x,y,u.',v.',3.5)
-% hold off
+colorbar
+h=streamslice(x,y,u.',v.',5);
+set(h,'color','w')
+for i=1:length(h)
+    zi = interp2(p',get(h(i),'xdata'),get(h(i),'ydata'));
+    set(h(i),'zdata',zi);
+end
+adeg = ceil(((param.alpha/pi) *180));
+title(['Inflow angle: ',num2str(adeg),' degrees'])
+hold off
 end
 
-
-
-
-
-
+function[] = makeGIF(field,grid,w,param,alpha_start,filename2)
+a=param.alpha;
+fig1 = figure(1);
+% adeg = ceil(((a/pi) *180));
+% title(['Inflow angle: ',num2str(adeg),' degree'])
+visualize(field,grid,param,w);
+drawnow  
+frame2 = getframe(fig1); 
+im2 = frame2im(frame2); 
+[imind2,cm2] = rgb2ind(im2,256); 
+% Write to the GIF File 
+if a == alpha_start
+  imwrite(imind2,cm2,filename2,'gif', 'Loopcount',inf); 
+else 
+imwrite(imind2,cm2,filename2,'gif','WriteMode','append'); 
+end 
+end
 
 
 
