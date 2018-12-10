@@ -86,7 +86,7 @@ T=t*param.dt; %- time until steady state - maybe interesting over vIN?
 visualize(field,grid,w);
 
 %lift calcs can go here - make big loop over alpha for plot
-
+[drag, lift] = solve_DragLift(field,grid,param,w)
 field_ss=field;
 %% Varying angle
 % bring to steady state at param.alpha=alpha_start first.
@@ -425,14 +425,33 @@ imwrite(imind2,cm2,filename2,'gif','WriteMode','append');
 end 
 end
 
+function[drag,lift] = solve_DragLift(field,grid,param,w)
+drag = 0;
+lift = 0;
 
+% bottom
+for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy
+    drag = drag + field.p(i,w.idy)*sin(param.alpha)*grid.dx;
+    lift = lift + field.p(i,w.idy)*cos(param.alpha)*grid.dx;
+end
 
+% top
+for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy+w.ldy-1
+    drag = drag - field.p(i,w.idy+w.ldy-1)*sin(param.alpha)*grid.dx;
+    lift = lift - field.p(i,w.idy+w.ldy-1)*cos(param.alpha)*grid.dx;
+end
 
+% left
+for j = w.idy:w.idy+w.ldy-1 % w.idx,w.idy:w.idy+w.ldy-1
+    drag = drag + field.p(w.idx,j)*cos(param.alpha)*grid.dy;
+    lift = lift - field.p(w.idx,j)*sin(param.alpha)*grid.dy;
+end
 
-
-
-
-
-
+% right
+for j = w.idy:w.idy+w.ldy-1 % w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1
+    drag = drag - field.p(w.idx+w.ldx-1,j)*cos(param.alpha)*grid.dy;
+    lift = lift + field.p(w.idx+w.ldx-1,j)*sin(param.alpha)*grid.dy;
+end
+end
 
 
