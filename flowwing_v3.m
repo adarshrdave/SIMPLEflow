@@ -1,4 +1,4 @@
-%% F18 CFD Project - incompressible flow around wing
+ca%% F18 CFD Project - incompressible flow around wing
 %% Setup
 %                     N
 % (1,ny) ----------------------------- (nx,ny)
@@ -29,13 +29,13 @@ field.v = zeros(grid.nx+2,grid.ny+1);
 
 
 % Inflow across all of W & S
-param.alpha = pi/4;
+param.alpha = 3.5*pi/8;
 param.vIN = 10; % magnitude of velocity of inflow
 
 % Wing - 
     %desired size in 'm'
 w.Ly = 10;
-w.Lx = 40;
+w.Lx = 60;
     %size in no cells
 w.ldy = floor(w.Ly/grid.dy);
 w.ldx = floor(w.Lx/grid.dx);
@@ -46,13 +46,13 @@ w.idx = ceil((grid.nx/2)-(w.ldx/2));
 % Init BCs
 field = setBC(field,grid,param,w);
 
-% Parameters (arbitraryly chosen for now)
+% Parameters 
 
 % Initialization, Parameters
 param.Re = 100;
 param.rho = 1.184;
 param.mu = 1;
-param.T = 5;
+param.T = 10;
 param.dt = .02;
 param.tsteps = param.T/param.dt;
 param.eps = .01;
@@ -77,11 +77,20 @@ field = computeVF_sections(field,grid,param,w);
 field.p = solveP_GS(field,grid,param,w);
 
 field = updateV(field,grid,param,w);
-
+figure(1)
+surface(field.p.')
+pause(0.1)
+% if (mod(t,50)==0)
+% t
+% figure(1)
+% clf
+% visualize(field,grid);
+% pause(0.1)
+% end
 end
 visualize(field,grid);
 %% test space
-
+visualize(field,grid,w);
 %% Functions
 %computes CD at v(i,j) node
 function[dP_dy] =  dPdy(field,grid)
@@ -105,7 +114,6 @@ end
 
 function[field] = setBC(field,grid,param,w)
 %Corners
-field.p(1,1) = 0;
 field.p(grid.nx+2,1) = 0;
 field.p(1,grid.ny+2) = 0;
 field.p(grid.nx+2,grid.ny+2) = 0;
@@ -342,22 +350,29 @@ end
 
 end
 
-function[] = visualize(field,grid)
+function[] = visualize(field,grid,w)
 [x,y] = meshgrid(1:1:grid.nx,1:1:grid.ny);
 u = zeros(grid.nx,grid.ny);
 v = zeros(grid.nx,grid.ny);
-
+p = zeros(grid.nx,grid.ny);
 for i = 2:grid.nx+1
     for j = 2:grid.ny+1
         u(i-1,j-1) = (field.u(i,j)+field.u(i-1,j))/2;
-        v(i-1,j-1) = (field.v(i,j)+field.v(i,j-1))/2;    
+        v(i-1,j-1) = (field.v(i,j)+field.v(i,j-1))/2;  
+        p(i-1,j-1) = field.p(i,j);
     end
 end
-quiver(x.',y.',u,v)
+u(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
+v(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
+
+%quiver(x.',y.',u,v)
+figure(1);
+surface(p','EdgeColor','none','LineStyle','none','FaceLighting','phong')
+figure(2)
+streamslice(x,y,u.',v.',3.5)
+% hold off
 end
 
-% figure(2)
-% surface(v.')
 
 
 
