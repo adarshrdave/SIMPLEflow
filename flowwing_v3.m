@@ -1,4 +1,4 @@
-ca%% F18 CFD Project - incompressible flow around wing
+%% F18 CFD Project - incompressible flow around wing
 %% Setup
 %                     N
 % (1,ny) ----------------------------- (nx,ny)
@@ -12,31 +12,40 @@ ca%% F18 CFD Project - incompressible flow around wing
 %                     S
 
 clear all;
-% grid parameters
-grid.Lx = 240;    %x-length of box
-grid.Ly = 100;    %y-length of box
-grid.dx = 1;   %cell dimensions
+% GRID
+grid.Lx = 16;    %x-length of box
+grid.Ly = 8;    %y-length of box
+grid.dx = .1;   %cell dimensions
 grid.dy = grid.dx;
 
+% WING
+w.Ly = 0.4;
+w.Lx = 4;
+
+%PARAMETERS
+param.alpha = (55/180)*(pi);
+param.vIN = 1; 
+param.Re = 100;
+param.rho = 1.184;
+param.mu = 1;
+param.T = 10;
+param.dt = .01;
+param.tsteps = param.T/param.dt;
+param.eps = .01;
+param.Q=0.5;
+param.s=10; %maximum speed in m/s
+
+%------------------INITIALIZATION--------------------------------
 %number of int. cells: nx*ny - ie. interior p nodes
-grid.nx = grid.Lx/grid.dx;
-grid.ny = grid.Ly/grid.dx;
+grid.nx = ceil(grid.Lx/grid.dx);
+grid.ny = ceil(grid.Ly/grid.dy);
 
 %set up arrays for p,u,v - big arrays including ghost nodes
 field.p = zeros(grid.nx+2,grid.ny+2);
 field.u = zeros(grid.nx+1,grid.ny+2);
 field.v = zeros(grid.nx+2,grid.ny+1);
 
-
-% Inflow across all of W & S
-param.alpha = 4*pi/8;
-param.vIN = 10; % magnitude of velocity of inflow
-
-% Wing - 
-    %desired size in 'm'
-w.Ly = 10;
-w.Lx = 60;
-    %size in no cells
+%size of wing in no cells
 w.ldy = floor(w.Ly/grid.dy);
 w.ldx = floor(w.Lx/grid.dx);
     %position in  grid - left-bottom corner-cell of wing
@@ -45,81 +54,124 @@ w.idx = ceil((grid.nx/2)-(w.ldx/2));
 
 % Init BCs
 field = setBC(field,grid,param,w);
+%-----------------------------------------------------------
 
-% Parameters 
+%% Steady State run
+% determine T s. t. field relatively constant ~ check diff
 
-% Initialization, Parameters
-param.Re = 100;
-param.rho = 1.184;
-param.mu = 1;
-param.T = 10;
-param.dt = .02;
-param.tsteps = param.T/param.dt;
-param.eps = .01;
-param.Q=0.5;
-param.s=10; %maximum speed in m/s
+for t=1:param.tsteps
 
-%% bring to steady state - use for lift calcs
-t = 1;
-diff=inf;
-delta = 10^(-3); %max rel change of pressure field
-
-while(diff>delta)
-t=t+1; 
 field = setBC(field,grid,param,w);
 p_old=field.p;
 
-%Intermediate velocity field
 field = computeVF_sections(field,grid,param,w);
 
-%field = setBC(field,grid,param,w);
 field.p = solveP_GS(field,grid,param,w);
+
 field = updateV(field,grid,param,w);
 
-diff = (norm(field.p-p_old)/norm(field.p));
+%some outputs - comment/uncomment, set frequency
 if (mod(t,10)==0)
-    disp(diff)
+%       figure(1)
+%      axis tight manual
+%      visualize(field,grid,param,w)
+
+%rel. change in p field if wanted
+% diff = norm(p_old-field.p)/norm(p_old);
+% disp(diff);
+% timestep
+disp(t*param.dt)
 end
 end
+visualize(field,grid,param,w);
+[drag,cd, lift,cl] = solve_DragLift2(field,grid,param,w);
 
-T=t*param.dt; %- time until steady state - maybe interesting over vIN?
-visualize(field,grid,w);
-
-%lift calcs can go here - make big loop over alpha for plot
-[drag, lift] = solve_DragLift(field,grid,param,w)
+%save field for reinitilization
 field_ss=field;
-%% Varying angle
+%% Varying angle - not really needed anymore
+for dummy=1:1
 % bring to steady state at param.alpha=alpha_start first.
 field = field_ss;
 alpha_start = pi/2;
 alpha_end = pi/4;
-d = 50;
-param.T = 1; %for each angle
-param.dt = .02;
-param.tsteps = param.T/param.dt;
-
-for a =alpha_start:-(alpha_start-alpha_end)/d:alpha_end
-param.alpha= a;
-if (a== alpha_end)
-   param.tsteps =  150;
-end
+d = 2;
+param.T = .5; %for each angle
+param.dt = .01;
+param.tsteps = 500;
+ax = gca;
+ax.NextPlot = 'replaceChildren';
+F2(param.tsteps) = struct('cdata',[],'colormap',[]);
+x =1;
 for t=1:param.tsteps
 field = setBC(field,grid,param,w);
-%Intermediate velocity field
 field = computeVF_sections(field,grid,param,w);
-%field = setBC(field,grid,param,w);
 field.p = solveP_GS(field,grid,param,w);
-field = updateV(field,grid,param,w); 
+field = updateV(field,grid,param,w);
+if(mod(t,10)==0)
+     visualize(field,grid,param,w);
+     drawnow
+     F2((di-1)*2 +x) = getframe; 
+     x=x+1;
 end
 
-makeGIF(field,grid,w,param,alpha_start,'rot1.gif')
-
 end
-%% test space
-visualize(field,grid,param,w);
+end
+%% test space - some good plots in here, don't change
+for dummy = 1:1
+% figure(1)
+% plot(lifts2)
+% figure(2)
+% plot(drags2)
+% [drag,cd, lift,cl] = solve_DragLift2(field,grid,param,w);
+% figure(1)
+% axis tight manual
+% visualize(field,grid,param,w);
+% figure(1)
+% plot(lifts)
+% figure(2)
+% plot(drags)
+% v = VideoWriter('anmtn3_fp8.avi','Motion JPEG AVI');
+% v.FrameRate = 8;
+% open(v)
+% writeVideo(v,F2)
+% close(v)
+% figure(1)
+% l = [1 2 4 6 8];
+% lft = [0.3 .5 5.1 9.4 13];
+% drg = [ 0.5 0.8 3.5 5.9 8.5];
+% plot(l,lft,l,drg)
+%  legend('lift','drag','Location','southeast')
+%  xlabel('length of wing in m')
+%  ylabel('lift/drag force in N')
+% figure(1);hold on;
+% alph1 = [0 10 20 30 35 45 50 55 60 75];
+% drg1 = [0 0.488 1.54 2.8 3.4 4.4 4.64 5.0 5.6 7.6];
+% lft1 = [0 2.29 4.15 4.9 5.0 4.8 4.48 4.1 3.7 2.15];
+% plot(alph1,lft1,'-r+')
+% plot(alph1,drg1,'-bo')
+% legend('lift','drag','Location','northwest')
+% title('freestream velocity: 1 m/s')
+% % hold off
+% set(findall(gca, 'Type', 'Line'),'LineWidth',2);
+% set(findall(gca, 'Type', 'Line'),'MarkerSize',8);
+% set(findall(gcf,'-property','FontSize'),'FontSize',12)
+% figure(2);hold on;
+% alph2 = [0 5 10 12 15 20 30];
+% drg2 = [0 0.4 1.5 2.0 2.5 2.9 4.4];
+% lft2 = [0 3.5 6.4 6.8 6.14 3.9 3.5];
+% plot(alph2,lft2,'-r+')
+% plot(alph2,drg2,'-b*')
+% legend('lift','drag','Location','southeast')
+% title('freestream velocity: 2 m/s')
+% xlabel('angle of attack in deg.')
+% ylabel('lift/drag force in N')
+% hold off
+% %axis([0 75 0 8])
+% set(findall(gca, 'Type', 'Line'),'LineWidth',2);
+% set(findall(gca, 'Type', 'Line'),'MarkerSize',8);
+% set(findall(gcf,'-property','FontSize'),'FontSize',12)
+end
 %% Functions
-%computes CD at v(i,j) node
-
 function[dP_dy] =  dPdy(field,grid)
 dP_dy = zeros(size(field.v));
 for i=2:grid.nx+1
@@ -129,7 +181,6 @@ for i=2:grid.nx+1
 end
 end
 
-%computes CD at u(i,j)
 function[dP_dx] =  dPdx(field,grid)
 dP_dx = zeros(size(field.u));
 for i=2:grid.nx
@@ -269,6 +320,7 @@ function[u] = computeAB_u(grid,param,U,V,i,j)
         %Update
         u=U(i,j)+param.dt*((1/param.Re)*(uxx+uyy)-(uuxCD+uuxUW+uvyCD+uvyUW));
 end
+
 function[v] = computeAB_v(grid,param,U,V,i,j)
 %Centered Difference
         uvxCD=((U(i,j+1)+U(i,j))*(V(i,j)+V(i+1,j))-(U(i-1,j+1)+U(i-1,j))*(V(i,j)+V(i-1,j)))/(4*grid.dx);
@@ -391,24 +443,63 @@ for i = 2:grid.nx+1
 end
 u(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
 v(w.idx-1:w.idx+w.ldx-2,w.idy-1:w.idy+w.ldy-2)=0;
-axis tight manual
+
 hold on;
 clf
 surface(p','EdgeColor','none','LineStyle','none','FaceLighting','phong')
-colorbar
+xlabel(['x in cells (dx= ',num2str(grid.dx),' m)'])
+ylabel(['y in cells (dy= ',num2str(grid.dy),' m)'])
+c = colorbar;
+c.Label.String = 'pressure (in kPa)';
+% contour(p',)
+set(c, 'ylim', [1 5])
 h=streamslice(x,y,u.',v.',5);
 set(h,'color','w')
 for i=1:length(h)
     zi = interp2(p',get(h(i),'xdata'),get(h(i),'ydata'));
     set(h(i),'zdata',zi);
 end
-adeg = ceil(((param.alpha/pi) *180));
-title(['Inflow angle: ',num2str(adeg),' degrees'])
+adeg = 90-ceil(((param.alpha/pi) *180));
+title(['angle of attack: ',num2str(adeg),' degrees'])
+axis([0 grid.nx 0 grid.ny])
 hold off
 end
 
-function[] = makeGIF(field,grid,w,param,alpha_start,filename2)
-a=param.alpha;
+%TODO: add shear drag
+function[drag,Cd,lift,Cl] = solve_DragLift2(field,grid,param,w)
+drag = 0;
+lift = 0;
+% bottom
+for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy
+    drag = drag + field.p(i,w.idy-1)*cos(param.alpha)*grid.dx;
+    lift = lift + field.p(i,w.idy-1)*sin(param.alpha)*grid.dx;
+end
+
+% top
+for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy+w.ldy-1
+    drag = drag - field.p(i,w.idy+w.ldy)*cos(param.alpha)*grid.dx;
+    lift = lift - field.p(i,w.idy+w.ldy)*sin(param.alpha)*grid.dx;
+end
+
+% left
+for j = w.idy:w.idy+w.ldy-1 % w.idx,w.idy:w.idy+w.ldy-1
+    drag = drag + field.p(w.idx-1,j)*cos(param.alpha)*grid.dy;
+    lift = lift - field.p(w.idx-1,j)*sin(param.alpha)*grid.dy;
+end
+
+% right
+for j = w.idy:w.idy+w.ldy-1 % w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1
+    drag = drag - field.p(w.idx+w.ldx,j)*cos(param.alpha)*grid.dy;
+    lift = lift + field.p(w.idx+w.ldx,j)*sin(param.alpha)*grid.dy;
+end
+Cd = (2*drag)/(param.rho*(param.vIN^2)*w.Lx);
+Cl = (2*lift)/(param.rho*(param.vIN^2)*w.Lx);
+
+end
+
+%% deprecated
+function[] = makeGIF(field,grid,w,param,a,filename2)
+% a=param.alpha;
 fig1 = figure(1);
 % adeg = ceil(((a/pi) *180));
 % title(['Inflow angle: ',num2str(adeg),' degree'])
@@ -418,40 +509,10 @@ frame2 = getframe(fig1);
 im2 = frame2im(frame2); 
 [imind2,cm2] = rgb2ind(im2,256); 
 % Write to the GIF File 
-if a == alpha_start
+if a == 1
   imwrite(imind2,cm2,filename2,'gif', 'Loopcount',inf); 
 else 
 imwrite(imind2,cm2,filename2,'gif','WriteMode','append'); 
 end 
 end
-
-function[drag,lift] = solve_DragLift(field,grid,param,w)
-drag = 0;
-lift = 0;
-
-% bottom
-for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy
-    drag = drag + field.p(i,w.idy)*sin(param.alpha)*grid.dx;
-    lift = lift + field.p(i,w.idy)*cos(param.alpha)*grid.dx;
-end
-
-% top
-for i = w.idx:w.idx+w.ldx-1 % w.idx:w.idx+w.ldx-1,w.idy+w.ldy-1
-    drag = drag - field.p(i,w.idy+w.ldy-1)*sin(param.alpha)*grid.dx;
-    lift = lift - field.p(i,w.idy+w.ldy-1)*cos(param.alpha)*grid.dx;
-end
-
-% left
-for j = w.idy:w.idy+w.ldy-1 % w.idx,w.idy:w.idy+w.ldy-1
-    drag = drag + field.p(w.idx,j)*cos(param.alpha)*grid.dy;
-    lift = lift - field.p(w.idx,j)*sin(param.alpha)*grid.dy;
-end
-
-% right
-for j = w.idy:w.idy+w.ldy-1 % w.idx+w.ldx-1,w.idy:w.idy+w.ldy-1
-    drag = drag - field.p(w.idx+w.ldx-1,j)*cos(param.alpha)*grid.dy;
-    lift = lift + field.p(w.idx+w.ldx-1,j)*sin(param.alpha)*grid.dy;
-end
-end
-
 
